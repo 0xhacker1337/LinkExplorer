@@ -1,0 +1,301 @@
+#!/bin/bash
+
+# Banner with colors
+echo -e "\e[1;36m
+ _      _         _     ______               _
+| |    (_)       | |    |  ___|             | |
+| |     _  _ __  | | __ | |__  __  __ _ __  | |  ___   _ __   ___  _ __
+| |    | || '_ \ | |/ / |  __| \ \/ /| '_ \ | | / _ \ | '__| / _ \| '__|
+| |____| || | | ||   <  | |___  >  < | |_) || || (_) || |   |  __/| |
+\_____/|_||_| |_||_|\_\ \____/ /_/\_\| .__/ |_| \___/ |_|    \___||_|
+                                     | |
+                                     |_|            ~cybe3king
+\e[0m"
+
+echo -e "\e[1;32m
+A tool to automate a bug bounty process:
+* Automates the bug bounty process for sensitive data leakage discovery.
+* Utilizes multiple tools for URL collection, data extraction, and data analysis.
+* Flexible to add more Extensions as per user's demand.
+* Provides a user-friendly command-line interface.
+* Regular expression and pattern-based data analysis.
+\e[0m"
+
+# Check if -d or -l option is provided
+if [ -z "$1" ]; then
+  echo -e "\e[1;33mUsage: $ linkexplorer [-d <domain>] [-l <list_of_domains>] [-o <output_file>]\e[0m"
+  exit 1
+fi
+
+while getopts ":d:l:o:" opt; do
+  case ${opt} in
+    d )
+      TARGET=$OPTARG
+      MODE="single"
+      ;;
+    l )
+      TARGET=$OPTARG
+      MODE="list"
+      ;;
+    o )
+      OUTPUT_FILE=$OPTARG
+      ;;
+    \? )
+      echo -e "\e[1;31mInvalid option: $OPTARG\e[0m"
+      exit 1
+      ;;
+    : )
+      echo -e "\e[1;31mInvalid option: $OPTARG requires an argument\e[0m"
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+# If output file is not provided, set default
+if [ -z "$OUTPUT_FILE" ]; then
+  OUTPUT_FILE="output.txt"
+fi
+
+# Check if TARGET is set
+if [ -z "$TARGET" ]; then
+  echo -e "\e[38;5;1mError: You must provide a domain or a list of domains using -d or -l option.\e[0m"
+  echo -e "\e[1;33mUsage: $0 [-d <domain>] [-l <list_of_domains>] [-o <output_file>]\e[0m"
+  exit 1
+fi
+
+# Function to check if a command exists
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# Prompt user to select tools
+echo -e "\e[1;34mSelect the tools you want to use:\e[0m"
+echo -e "\e[1;33mEnter the numbers corresponding to the tools you want to use. You can select multiple tools by entering their numbers separated by spaces.\e[0m"
+echo -e "\e[1;33mFor example: '1 2 3' to select tools 1, 2, and 3.\e[0m"
+TOOLS=("waymore" "gau" "gauplus" "waybackurls" "katana")
+for i in "${!TOOLS[@]}"; do
+  echo "$((i+1)). ${TOOLS[$i]}"
+done
+
+while true; do
+  read -p "Enter your choices: " choices
+  IFS=' ' read -r -a selected_indices <<< "$choices"
+
+  valid=true
+  for index in "${selected_indices[@]}"; do
+    if [[ ! $index =~ ^[0-9]+$ ]] || [[ $index -lt 1 || $index -gt ${#TOOLS[@]} ]]; then
+      valid=false
+      break
+    fi
+  done
+
+  if $valid; then
+    selected_tools=()
+    for index in "${selected_indices[@]}"; do
+      selected_tools+=("${TOOLS[$((index-1))]}")
+    done
+    break
+  else
+    echo -e "\e[1;31mInvalid option(s). Please enter valid numbers.\e[0m"
+    echo -e "\e[1;33mYou can select multiple tools by entering their numbers separated by spaces.\e[0m"
+    echo -e "\e[1;33mFor example: '1 2 3' to select tools 1, 2, and 3.\e[0m"
+    for i in "${!TOOLS[@]}"; do
+      echo "$((i+1)). ${TOOLS[$i]}"
+    done
+  fi
+done
+
+# Check if necessary selected tools are installed
+for tool in "${selected_tools[@]}"; do
+  if ! command_exists $tool; then
+    echo -e "\e[1;31mError: $tool is not installed. Please install it before using LinkExplorer.\e[0m"
+    exit 1
+  fi
+done
+
+OUTPUT_DIR="output"
+COMBINED_OUTPUT="$OUTPUT_DIR/combined_output.txt"
+FINAL_OUTPUT="$OUTPUT_DIR/$OUTPUT_FILE"
+mkdir -p "$OUTPUT_DIR"
+
+# Clear the combined output file if it exists
+> "$COMBINED_OUTPUT"
+
+# Function to gather command selection for all tools
+gather_tool_selections() {
+  local tool=$1
+  local options=("${@:2}")
+
+  while true; do
+    echo -e "\e[1;34mSelect commands for $tool:\e[0m"
+    local i=1
+    for option in "${options[@]}"; do
+      if [[ $MODE == "single" ]]; then
+        option=$(echo "$option" | sed "s/\$TARGET/$TARGET/g") # Replace placeholder with actual target
+      else
+        option=$(echo "$option" | sed "s/\$TARGET/$(basename $TARGET)/g") # Replace placeholder with the filename
+      fi
+      echo "$i. $option"
+      ((i++))
+    done
+
+    read -p "Enter option numbers (space-separated) or 'n' to skip: " selected_options
+
+    if [[ $selected_options == 'n' ]]; then
+      echo -e "\e[1;33mSkipping $tool.\e[0m"
+      return
+    fi
+
+    # Validate selected options
+    local valid=true
+    for option in ${selected_options}; do
+      if [[ ! $option =~ ^[0-9]+$ ]] || [[ $option -lt 1 || $option -gt ${#options[@]} ]]; then
+        valid=false
+        break
+      fi
+    done
+
+    if $valid; then
+      # Store selected commands for this tool
+      selected_commands[$tool]=$selected_options
+      return
+    else
+      echo -e "\e[1;31mInvalid option(s). Please try again.\e[0m"
+    fi
+  done
+}
+
+# Define commands for each tool
+waymore_commands=(
+  "waymore -i \$TARGET -mode U -oU \$OUTPUT_DIR/waymore_output.txt -url-filename -p 4"
+)
+
+gau_commands=(
+  "gau --subs \$TARGET"
+)
+
+waybackurls_commands=(
+  "waybackurls \$TARGET"
+)
+
+katana_commands=(
+  "katana -u \$TARGET -hl -o \$OUTPUT_DIR/katana_output.txt"
+)
+
+gauplus_commands=(
+  "gauplus -subs -random-agent \$TARGET"
+)
+
+# Gather selections for all selected tools
+declare -A selected_commands
+
+for tool in "${selected_tools[@]}"; do
+  case $tool in
+    waymore)
+      gather_tool_selections "waymore" "${waymore_commands[@]}"
+      ;;
+    gau)
+      gather_tool_selections "gau" "${gau_commands[@]}"
+      ;;
+    waybackurls)
+      gather_tool_selections "waybackurls" "${waybackurls_commands[@]}"
+      ;;
+    katana)
+      gather_tool_selections "katana" "${katana_commands[@]}"
+      ;;
+    gauplus)
+      gather_tool_selections "gauplus" "${gauplus_commands[@]}"
+      ;;
+  esac
+done
+
+# Function to run selected commands for a tool
+run_selected_commands() {
+  local tool=$1
+  local commands=("${@:2}")
+
+  local selected_options="${selected_commands[$tool]}"
+
+  if [[ -z $selected_options ]]; then
+    echo -e "\e[1;33mNo commands selected for $tool.\e[0m"
+    return
+  fi
+
+  local i=1
+  for option in ${selected_options}; do
+    if [[ $option -ge 1 && $option -le ${#commands[@]} ]]; then
+      local cmd="${commands[$((option - 1))]}"
+      cmd=$(echo "$cmd" | sed "s/\$TARGET/$TARGET/g") # Replace placeholder with actual target
+      echo -e "\e[1;32mRunning: $cmd\e[0m"
+      eval "$cmd" >> "$COMBINED_OUTPUT"
+    else
+      echo -e "\e[1;31mInvalid command selected for $tool.\e[0m"
+    fi
+  done
+}
+
+# Function to process each domain from the list after removing http(s)
+process_domain_list() {
+  while IFS= read -r domain; do
+    # Remove http:// and https:// from the domain
+    TARGET=$(echo "$domain" | sed 's~http[s]\?://~~g')
+
+    echo -e "\e[1;32mProcessing domain: $TARGET\e[0m"
+    for tool in "${selected_tools[@]}"; do
+      case $tool in
+        waymore)
+          run_selected_commands "waymore" "${waymore_commands[@]}"
+          ;;
+        gau)
+          run_selected_commands "gau" "${gau_commands[@]}"
+          ;;
+        waybackurls)
+          run_selected_commands "waybackurls" "${waybackurls_commands[@]}"
+          ;;
+        katana)
+          run_selected_commands "katana" "${katana_commands[@]}"
+          ;;
+        gauplus)
+          run_selected_commands "gauplus" "${gauplus_commands[@]}"
+          ;;
+      esac
+    done
+  done < "$TARGET"
+}
+
+# Process the input based on the mode
+if [[ $MODE == "single" ]]; then
+  # Remove http:// and https:// from the domain
+  TARGET=$(echo "$TARGET" | sed 's~http[s]\?://~~g')
+
+  for tool in "${selected_tools[@]}"; do
+    case $tool in
+      waymore)
+        run_selected_commands "waymore" "${waymore_commands[@]}"
+        ;;
+      gau)
+        run_selected_commands "gau" "${gau_commands[@]}"
+        ;;
+      waybackurls)
+        run_selected_commands "waybackurls" "${waybackurls_commands[@]}"
+        ;;
+      katana)
+        run_selected_commands "katana" "${katana_commands[@]}"
+        ;;
+      gauplus)
+        run_selected_commands "gauplus" "${gauplus_commands[@]}"
+        ;;
+    esac
+  done
+elif [[ $MODE == "list" ]]; then
+  process_domain_list
+else
+  echo -e "\e[1;33mError: Invalid mode. Please use -d for a single domain or -l for a list of domains.\e[0m"
+  exit 1
+fi
+
+# Move combined output to final output file
+mv "$COMBINED_OUTPUT" "$FINAL_OUTPUT"
+
+echo -e "\e[1;32mOutput saved to: $FINAL_OUTPUT\e[0m"
