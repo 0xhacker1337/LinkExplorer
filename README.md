@@ -37,7 +37,7 @@ Make sure you have the required tools installed. You can install them using your
 ## Usage
 
 ```bash
-./linkexplorer.sh <target|target_list_file> [output_file]
+./linkexplorer -d <domain> -l <list_of_domains> -o <output_file>
 ```
 -  -d <target > | -l <target_list_filename>: The domain or file containing a list of domains to process.
 - -o [output_filename]: Optional output file name. If not provided, a default name will be used.
