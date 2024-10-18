@@ -39,22 +39,22 @@ Make sure you have the required tools installed. You can install them using your
 ```bash
 ./linkexplorer.sh <target|target_list_file> [output_file]
 ```
-- <target|target_list_file>: The domain or file containing a list of domains to process.
-- [output_file]: Optional output file name. If not provided, a default name will be used.
+-  -d <target > | -l <target_list_filename>: The domain or file containing a list of domains to process.
+- -o [output_filename]: Optional output file name. If not provided, a default name will be used.
 
 ## Example
 Run the script with a single domain:
 ```bash
-./linkexplorer.sh <target|target_list_file> [output_file]
+./linkexplorer.sh -d domain.com -o output.txt
 ```
 Run the script with a list of domains from a file:
 
 ```bash
-./linkexplorer.sh domains.txt
+./linkexplorer.sh -l domains.txt
 ```
 Specify an output file:
 ```bash
-./linkexplorer.sh domains.txt custom_output.txt
+./linkexplorer.sh -l domains.txt -o custom_output.txt
 ```
 
 ## Adding/Removing Commands
