@@ -32,10 +32,10 @@ This script helps gather URLs from various sources using multiple tools. It supp
 
 ## Installation
 
-Clone this repository: git clone https://github.com/0xhacker1337/LinkExplorer
-Navigate to files: cd LinkExplorer
-Provide Execute Permission: chmod +x linkexplorer.sh
-Run LinkExplorer: ./linkexplorer.sh
+- Clone this repository: `git clone https://github.com/0xhacker1337/LinkExplorer`
+- Navigate to files: `cd LinkExplorer`
+- Provide Execute Permission: `chmod +x linkexplorer.sh`
+- Run LinkExplorer: `./linkexplorer.sh`
 
 ## Usage
 
